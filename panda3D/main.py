@@ -1,5 +1,6 @@
 from direct.showbase.ShowBase import ShowBase, loadPrcFileData
 from panda3d.core import Vec3
+import math
 
 # Enable the assimp loader so that .obj files can be loaded.
 loadPrcFileData("", "load-file-type p3assimp")
@@ -7,37 +8,100 @@ loadPrcFileData("", "load-file-type p3assimp")
 class MyApp(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
-        # Disable default mouse-based camera control to allow custom movement.
-        #self.disableMouse()
+
+        # Disable default mouse camera control.
+        self.disableMouse()
 
         # Load the .obj model. Change the file path as needed.
         self.model = self.loader.loadModel("resources/eb_house_plant_01.obj")
         self.model.reparentTo(self.render)
-        # Adjust model placement if necessary.
         self.model.setPos(0, 50, 0)
+        
+        # Load and apply texture.
+        # texture = self.loader.loadTexture("resources/eb_house_plant_01.mtl")
+        # self.model.setTexture(texture, 1)
+        
+        # Set up orbit parameters so the camera rotates around the model.
+        # The orbit target is the model's position.
+        self.target = self.model.getPos()
+        self.orbitAngle = 180    # horizontal angle (degrees)
+        self.pitchAngle = 20     # vertical angle (degrees)
+        self.cameraDistance = 30 # distance from the target
 
-        # Set an initial camera position and orient it towards the model.
-        self.camera.setPos(0, 0, 10)
-        self.camera.lookAt(self.model)
+        # Define movement speeds.
+        self.rotateSpeed = 60    # degrees per second for rotation
+        self.zoomSpeed = 10      # units per second for zooming
+        self.panSpeed = 10       # units per second for panning
 
-        # Speeds for movement (units per second) and rotation (degrees per second).
-        self.moveSpeed = 20
-        self.rotateSpeed = 60
+        # Set up state for key controls.
+        self.keyMap = {
+            "w": False,   # Zoom in
+            "a": False,   # Pan left
+            "s": False,   # Zoom out
+            "d": False,   # Pan right
+            "arrow_left": False,  # Rotate horizontally (orbit)
+            "arrow_right": False, # Rotate horizontally (orbit)
+            "arrow_up": False,    # Increase pitch (rotate upward)
+            "arrow_down": False   # Decrease pitch (rotate downward)
+        }
+        for key in self.keyMap.keys():
+            self.accept(key, self.setKey, [key, True])
+            self.accept(key + "-up", self.setKey, [key, False])
 
-        # Add a task to update the camera position each frame.
+        # Add the update task.
         self.taskMgr.add(self.updateTask, "updateTask")
+        
+        # Initialize camera position.
+        self.updateCameraPosition()
 
-    def updateKey(self, key, state):
-        self.keyMap[key] = state
+    def setKey(self, key, value):
+        self.keyMap[key] = value
 
     def updateTask(self, task):
         dt = globalClock.getDt()
 
-        # Calculate the forward and right vectors relative to the current view.
-        forward = self.camera.getQuat(self.render).getForward()
-        right = self.camera.getQuat(self.render).getRight()
+        # Adjust orbit rotation using the arrow keys.
+        if self.keyMap["arrow_left"]:
+            self.orbitAngle += self.rotateSpeed * dt
+        if self.keyMap["arrow_right"]:
+            self.orbitAngle -= self.rotateSpeed * dt
+        if self.keyMap["arrow_up"]:
+            # Clamp the pitch angle to avoid flipping.
+            self.pitchAngle = min(self.pitchAngle + self.rotateSpeed * dt, 85)
+        if self.keyMap["arrow_down"]:
+            self.pitchAngle = max(self.pitchAngle - self.rotateSpeed * dt, 5)
 
+        # Use W/S to zoom in/out.
+        if self.keyMap["w"]:
+            self.cameraDistance = max(self.cameraDistance - self.zoomSpeed * dt, 5)
+        if self.keyMap["s"]:
+            self.cameraDistance += self.zoomSpeed * dt
+
+        # Use A/D to pan the target point sideways.
+        # This moves the center point around which the camera orbits.
+        if self.keyMap["a"]:
+            self.target -= self.camera.getQuat(self.render).getRight() * self.panSpeed * dt
+        if self.keyMap["d"]:
+            self.target += self.camera.getQuat(self.render).getRight() * self.panSpeed * dt
+
+        # Update the camera's position based on the new parameters.
+        self.updateCameraPosition()
         return task.cont
+
+    def updateCameraPosition(self):
+        # Convert angles from degrees to radians.
+        radOrbit = math.radians(self.orbitAngle)
+        radPitch = math.radians(self.pitchAngle)
+        
+        # Calculate the offset using spherical coordinates.
+        offsetX = self.cameraDistance * math.sin(radOrbit) * math.cos(radPitch)
+        offsetY = self.cameraDistance * math.cos(radOrbit) * math.cos(radPitch)
+        offsetZ = self.cameraDistance * math.sin(radPitch)
+        
+        # Set the new camera position relative to the target.
+        newPos = self.target + Vec3(offsetX, offsetY, offsetZ)
+        self.camera.setPos(newPos)
+        self.camera.lookAt(self.target)
 
 app = MyApp()
 app.run()
