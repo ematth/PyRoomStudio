@@ -50,8 +50,6 @@ If everything is setup correctly, you will see a spinning rendering of a potted 
 
 [Pyroomacoustics](https://github.com/LCAV/pyroomacoustics): Copyright (c)2014-2017, EPFL-LCAV
 
-<!-- [Software_3D_engine](https://github.com/StanislavPetrovV/Software_3D_engine): Copyright (c) 2020, StanislavPetrovV -->
-
 [panda3d](https://github.com/panda3d/panda3d): Copyright (c) 2008, Carnegie Mellon University.
 
 
