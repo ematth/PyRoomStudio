@@ -1,14 +1,18 @@
 from direct.showbase.ShowBase import ShowBase, loadPrcFileData
 from panda3d.core import Vec3, TextureStage
-import math, sys, simplepbr
+import math, sys, simplepbr, os.path as path
 
 # Enable the assimp loader so that .obj files can be loaded.
 loadPrcFileData("", "load-file-type p3assimp")
 
 class MyApp(ShowBase):
 
-    def load_obj(self, filename):
-        # Load the .obj model. Change the file path as needed.
+    def load_obj(self, filename) -> None:
+        """Load a model from a .obj file.
+
+        Args:
+            filename (str): file name
+        """
         try:
             self.model = self.loader.loadModel(filename)
             self.model.reparentTo(self.render)
@@ -19,24 +23,60 @@ class MyApp(ShowBase):
             print('Unable to load model. Please make sure that the model file exists.')
 
         # Set up a texture stage to apply the texture to the model.
-        try:
-            diffuse=self.loader.loadTexture(f"{filename[:-8]}_diffuse.png")
-            normal=self.loader.loadTexture(f"{filename[:-8]}_normal.png")
-        except:
-            print(f"{filename[:-8]}_diffuse.png")
-            print('Texture files not found. Please make sure that the texture files are in the same directory as the model file.')
-            sys.exit()
-        self.model.setTexture(diffuse, 1)
+        if path.exists(f"{filename[:-8]}_diffuse.png"):
+            try:
+                diffuse=self.loader.loadTexture(f"{filename[:-8]}_diffuse.png")
+                normal=self.loader.loadTexture(f"{filename[:-8]}_normal.png")
+            except:
+                print("PNG texture issue")
+                sys.exit()
+        elif path.exists(f"{filename[:-4]}_c.tga"):
+            try:
+                diffuse=self.loader.loadTexture(f"{filename[:-4]}_c.tga")
+                normal = self.loader.loadTexture(f"{filename[:-4]}_n.tga")
+            except:
+                print("TGA texture issue")
+                sys.exit()
 
+        # set textures
+        self.model.setTexture(diffuse, 1)
         normal_stage = TextureStage("normal_stage")
         normal_stage.setMode(TextureStage.MNormal)
         self.model.setTexture(normal_stage, normal, 1)
 
+    
+    def load_stl(self, filename) -> None:
+        """Load a model from a .stl file.
 
-    def model_loader(self, filename):
+        Args:
+            filename (str): file name
+        """
+        return NotImplemented
+    
+
+    def load_fbx(self, filename) -> None:
+        """Load a model from a .fbx file.
+
+        Args:
+            filename (str): file name
+        """
+        return NotImplemented
+
+
+    def model_loader(self, filename) -> None:
+        """Match the file extension and load the model accordingly.
+
+        Args:
+            filename (str): name of the model file.
+        """
+        print(filename[-4:]) 
         match filename[-4:]:
             case '.obj':
                 self.load_obj(filename)
+            case '.stl':
+                self.load_stl(filename)
+            case '.fbx':
+                self.load_fbx(filename)
             case _:
                 print('Invalid file format. Only .obj files are supported.')
                 sys.exit()
@@ -46,6 +86,9 @@ class MyApp(ShowBase):
         ShowBase.__init__(self)
 
         simplepbr.init()
+
+        self.setFrameRateMeter(True)
+        self.frameRateMeter.setUpdateInterval(0.1)
 
         # Disable default mouse camera control.
         self.disableMouse()
@@ -58,7 +101,7 @@ class MyApp(ShowBase):
         self.target = self.model.getPos()
         self.orbitAngle = 180    # horizontal angle (degrees)
         self.pitchAngle = 20     # vertical angle (degrees)
-        self.cameraDistance = 30 # distance from the target
+        self.cameraDistance = 10 # distance from the target
 
         # Define movement speeds.
         self.rotateSpeed = 60    # degrees per second for rotation
@@ -86,8 +129,10 @@ class MyApp(ShowBase):
         # Initialize camera position.
         self.updateCameraPosition()
 
+
     def setKey(self, key, value):
         self.keyMap[key] = value
+
 
     def updateTask(self, task):
         dt = globalClock.getDt()
@@ -109,18 +154,17 @@ class MyApp(ShowBase):
         if self.keyMap["s"]:
             self.cameraDistance += self.zoomSpeed * dt
 
-        # # Use A/D to pan the target point sideways.
-        # # This moves the center point around which the camera orbits.
-        # if self.keyMap["a"]:
-        #     self.target -= self.camera.getQuat(self.render).getRight() * self.panSpeed * dt
-        # if self.keyMap["d"]:
-        #     self.target += self.camera.getQuat(self.render).getRight() * self.panSpeed * dt
-
         # Update the camera's position based on the new parameters.
         self.updateCameraPosition()
         return task.cont
 
-    def updateCameraPosition(self):
+
+    def updateCameraPosition(self) -> Vec3:
+        """Update the camera's position based on the current orbit parameters.
+
+        Returns:
+            Vec3: length-3 vector of the new camera position.
+        """
         # Convert angles from degrees to radians.
         radOrbit = math.radians(self.orbitAngle)
         radPitch = math.radians(self.pitchAngle)
@@ -134,8 +178,12 @@ class MyApp(ShowBase):
         newPos = self.target + Vec3(offsetX, offsetY, offsetZ)
         self.camera.setPos(newPos)
         self.camera.lookAt(self.target)
+        return newPos
 
 if __name__ == "__main__":
 
-    app = MyApp(filename=sys.argv[1])
+    # Default loaded model to the cottage, but can be changed via command line.
+    model_name: str = 'resources/cottage_obj.obj' if (len(sys.argv) < 2) else sys.argv[1]
+
+    app = MyApp(filename=model_name)
     app.run()
