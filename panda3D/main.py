@@ -1,13 +1,48 @@
 from direct.showbase.ShowBase import ShowBase, loadPrcFileData
 from panda3d.core import Vec3, TextureStage
-import math
-import simplepbr
+import math, sys, simplepbr
 
 # Enable the assimp loader so that .obj files can be loaded.
 loadPrcFileData("", "load-file-type p3assimp")
 
 class MyApp(ShowBase):
-    def __init__(self):
+
+    def load_obj(self, filename):
+        # Load the .obj model. Change the file path as needed.
+        try:
+            self.model = self.loader.loadModel(filename)
+            self.model.reparentTo(self.render)
+            self.model.setPos(0, 50, 0)
+            self.model.setScale(0.1)
+            self.model.setHpr(0, 90, 0)
+        except:
+            print('Unable to load model. Please make sure that the model file exists.')
+
+        # Set up a texture stage to apply the texture to the model.
+        try:
+            diffuse=self.loader.loadTexture(f"{filename[:-8]}_diffuse.png")
+            normal=self.loader.loadTexture(f"{filename[:-8]}_normal.png")
+        except:
+            print(f"{filename[:-8]}_diffuse.png")
+            print('Texture files not found. Please make sure that the texture files are in the same directory as the model file.')
+            sys.exit()
+        self.model.setTexture(diffuse, 1)
+
+        normal_stage = TextureStage("normal_stage")
+        normal_stage.setMode(TextureStage.MNormal)
+        self.model.setTexture(normal_stage, normal, 1)
+
+
+    def model_loader(self, filename):
+        match filename[-4:]:
+            case '.obj':
+                self.load_obj(filename)
+            case _:
+                print('Invalid file format. Only .obj files are supported.')
+                sys.exit()
+
+
+    def __init__(self, filename) -> None:
         ShowBase.__init__(self)
 
         simplepbr.init()
@@ -15,23 +50,8 @@ class MyApp(ShowBase):
         # Disable default mouse camera control.
         self.disableMouse()
 
-        # Load the .obj model. Change the file path as needed.
-        self.model = self.loader.loadModel("resources/cottage_obj.obj")
-        self.model.reparentTo(self.render)
-        self.model.setPos(0, 50, 0)
-        self.model.setScale(0.1)
-        self.model.setHpr(0, 90, 0)
-
-        # Set up a texture stage to apply the texture to the model.
-
-        diffuse=self.loader.loadTexture("resources/cottage_diffuse.png")
-        normal=self.loader.loadTexture("resources/cottage_normal.png")
-        self.model.setTexture(diffuse, 1)
-
-        normal_stage = TextureStage("normal_stage")
-        normal_stage.setMode(TextureStage.MNormal)
-        self.model.setTexture(normal_stage, normal, 1)
-
+        # Load the model.
+        self.model_loader(filename)
         
         # Set up orbit parameters so the camera rotates around the model.
         # The orbit target is the model's position.
@@ -115,5 +135,7 @@ class MyApp(ShowBase):
         self.camera.setPos(newPos)
         self.camera.lookAt(self.target)
 
-app = MyApp()
-app.run()
+if __name__ == "__main__":
+
+    app = MyApp(filename=sys.argv[1])
+    app.run()
