@@ -12,5 +12,5 @@ class Acoustic():
         self.speed_of_sound = 343.0
         return
     
-    def simulate():
+    def simulate(self):
         return 0

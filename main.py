@@ -9,13 +9,16 @@ class App():
         self.name = 'App'
         self.model = None
         self.render = Render(filename=model_name)
-        #self.acoustic = Acoustic()
+        self.acoustic = Acoustic()
 
     def run(self):
+
         while True:
+            # Main loop
             self.render.taskMgr.step()
-            time.sleep(0.025) # this is crude, remove later
-            #self.acoustic.simulate()
+            time.sleep(0.025) # crude 30FPS cap, switch to Panda3D's clock later
+            self.acoustic.simulate()
+
             if self.render.win.isClosed():
                 sys.exit()
 
