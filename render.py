@@ -5,7 +5,7 @@ rendering meshes relative to the intended acoustics simulations.
 
 
 from direct.showbase.ShowBase import ShowBase, loadPrcFileData
-from panda3d.core import Vec4, TextureStage, Point3, TextNode, AmbientLight, DirectionalLight
+from panda3d.core import *
 import math, sys, simplepbr, os.path as path
 from direct.gui.OnscreenText import OnscreenText
 
@@ -26,9 +26,11 @@ class Render(ShowBase):
             self.model.setPos(0, 0, -0.5)
             self.model.setScale(0.5)
             # self.model.setHpr(0, 90, 0)
+            self.model.setTransparency(TransparencyAttrib.MAlpha)
+            self.model.setAlphaScale(0.8)
+
         except:
             print('Unable to load model. Please make sure that the model type exists.')
-
 
     def load_obj(self, filename) -> None:
         """Load a model from a .obj file.
@@ -42,6 +44,7 @@ class Render(ShowBase):
             # self.model.setPos(0, 50, 0)
             self.model.setScale(0.1)
             self.model.setHpr(0, 90, 0)
+            
         except:
             print('Unable to load model. Please make sure that the model file exists.')
 
@@ -78,7 +81,6 @@ class Render(ShowBase):
         Args:
             filename (str): name of the model file.
         """
-        print(filename[-4:]) 
         match filename[-4:] == '.obj':
             case True:
                 self.load_obj(filename)
@@ -87,6 +89,18 @@ class Render(ShowBase):
             case _:
                 print('Invalid file format. Only .obj files are supported.')
                 sys.exit()
+
+    def create_floor(self):
+        """Create a floor grid beneath the teapot"""
+        # Create a CardMaker to make a flat card
+        cm = CardMaker('floor')
+        cm.setFrame(-10, 10, -10, 10)  # 20x20 unit floor
+        
+        # Create the floor and attach it to the scene
+        floor = self.render.attachNewNode(cm.generate())
+        floor.setP(-90)  # Rotate it to be horizontal (pitch -90 degrees)
+        floor.setZ(-0.5)  # Position slightly below the origin to avoid z-fighting
+        floor.setColor(0.5, 1.0, 0.5, 1)  # Set the color to light gray
 
 
     def __init__(self, filename) -> None:
@@ -100,7 +114,8 @@ class Render(ShowBase):
         # Set background color
         self.setBackgroundColor(0.1, 0.1, 0.2)
 
-        # Load the model.
+        # Load the model and floor
+        self.create_floor()
         self.model_loader(filename)
 
         # Set up lighting
@@ -111,7 +126,7 @@ class Render(ShowBase):
         
         # Set up camera parameters
         self.camera_distance = 10.0       # Distance from camera to object
-        self.min_distance = 3.0          # Minimum zoom distance
+        self.min_distance = 0.0          # Minimum zoom distance
         self.max_distance = 15.0         # Maximum zoom distance
         self.camera_heading = 35.0        # Horizontal rotation angle
         self.camera_pitch = 35.0          # Vertical rotation angle
@@ -130,7 +145,7 @@ class Render(ShowBase):
         self.accept("mouse1-up", self.on_mouse_up)
         self.accept("wheel_up", self.on_wheel_up)
         self.accept("wheel_down", self.on_wheel_down)
-
+        self.accept("escape", sys.exit)
 
         # Add the update task.
         self.taskMgr.add(self.update_camera, "UpdateCameraTask")

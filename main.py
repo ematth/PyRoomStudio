@@ -18,7 +18,8 @@ class App():
             self.render.taskMgr.step()
             #time.sleep(0.025) # crude 30FPS cap, switch to Panda3D's clock later
             self.acoustic.simulate()
-
+            # if keyboard.is_pressed('q'):
+            #     sys.exit()
             if self.render.win.isClosed():
                 sys.exit()
 
