@@ -18,7 +18,9 @@ class Render(ShowBase):
         """Loads a file from a default described in Panda3D
 
         Args:
-            name (_type_): name of the object, i.e. teapot, cube, etc.
+            name (_type_): name of the object, i.e. teapot, etc.
+            options: teapot, jack, ripple, box, frowney, environment, 
+            cmtt12, cmss12, cmr12, camera, shuttle_controls, yup-axis, zup-axis.
         """
         try:
             self.model = self.loader.loadModel(name)
@@ -27,7 +29,7 @@ class Render(ShowBase):
             self.model.setScale(0.5)
             # self.model.setHpr(0, 90, 0)
             self.model.setTransparency(TransparencyAttrib.MAlpha)
-            self.model.setAlphaScale(0.8)
+            # self.model.setAlphaScale(0.8)
 
         except:
             print('Unable to load model. Please make sure that the model type exists.')
@@ -103,6 +105,19 @@ class Render(ShowBase):
         floor.setColor(0.5, 1.0, 0.5, 1)  # Set the color to light gray
 
 
+    def axes_indicator(self) -> None:
+        """Renders axes indicator to bottom corner of the screen"""
+        corner = self.aspect2d.attachNewNode("corner of screen")
+        corner.setPos(-1.2, 0, -0.9)
+        self.axis = self.loader.loadModel("zup-axis")
+        self.axis.setScale(0.025)
+        self.axis.reparentTo(corner)
+
+    def axisTask(self, task):
+        self.axis.setHpr(self.camera.getHpr())
+        return task.cont
+
+
     def __init__(self, filename) -> None:
         ShowBase.__init__(self)
 
@@ -115,7 +130,8 @@ class Render(ShowBase):
         self.setBackgroundColor(0.1, 0.1, 0.2)
 
         # Load the model and floor
-        self.create_floor()
+        # self.create_floor()
+        self.axes_indicator()
         self.model_loader(filename)
 
         # Set up lighting
@@ -149,6 +165,7 @@ class Render(ShowBase):
 
         # Add the update task.
         self.taskMgr.add(self.update_camera, "UpdateCameraTask")
+        self.taskMgr.add(self.axisTask, "axisTask")
 
         # Create onscreen text for camera stats
         self.heading_text = OnscreenText(
