@@ -171,6 +171,7 @@ class Render(ShowBase):
         self.accept("wheel_up", self.on_wheel_up)
         self.accept("wheel_down", self.on_wheel_down)
         self.accept("escape", sys.exit)
+        self.accept("u", self.obj_info)
 
         # Add the update task.
         self.taskMgr.add(self.update_camera, "UpdateCameraTask")
@@ -195,6 +196,43 @@ class Render(ShowBase):
         
         # Initialize camera position.
         self.update_camera_position()
+
+
+    # see https://github.com/LCAV/pyroomacoustics/issues/392
+    def obj_info(self) -> str:
+        """Returns the object information"""
+        geom_nodes = self.model.findAllMatches('**/+GeomNode')
+        for node_path in geom_nodes:
+            geom_node = node_path.node()
+            print(f"\n[GeomNode: {geom_node.getName()}]")
+
+            for i in range(geom_node.getNumGeoms()):
+                geom = geom_node.getGeom(i)
+                vdata = geom.getVertexData()
+
+                # Create readers for each attribute
+                vertex_reader = GeomVertexReader(vdata, 'vertex')
+                normal_reader = GeomVertexReader(vdata, 'normal') if vdata.hasColumn('normal') else None
+                color_reader = GeomVertexReader(vdata, 'color') if vdata.hasColumn('color') else None
+
+                print(f"  Geom {i}: {vdata.getNumRows()} vertices")
+
+                for j in range(vdata.getNumRows()):
+                    vertex_reader.setRow(j)
+                    vertex = vertex_reader.getData3()
+                    print(f"    Vertex {j}: {vertex}")
+
+                    if normal_reader:
+                        normal_reader.setRow(j)
+                        normal = normal_reader.getData3()
+                        print(f"      Normal: {normal}")
+
+                    if color_reader:
+                        color_reader.setRow(j)
+                        color = color_reader.getData4()
+                        print(f"      Color: {color}")
+
+        return self.model.getName()
 
     def setup_lighting(self):
         """Set up basic scene lighting"""
