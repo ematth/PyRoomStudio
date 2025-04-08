@@ -50,14 +50,19 @@ def compute_volumetric_center(stl_mesh):
 
 class Acoustic(pra.room.Room):
 
-    def build_stl(self, filename: str, sound: str = 'sounds/piano.wav') -> None:
-        """
-        Build the room from an STL file.
-        """
+
+    def __init__(self, filename: str):
+        self.filename = filename
+        self.sample_rate = 44100
+        self.speed_of_sound = 343.0
+
+
+    def simulate(self):
         from stl import mesh
-        
         material = pra.Material(energy_absorption=0.2, scattering=0.1)
-        the_mesh = mesh.Mesh.from_file(filename)
+
+        # with numpy-stl
+        the_mesh = mesh.Mesh.from_file(self.filename)
         ntriang, nvec, npts = the_mesh.vectors.shape
 
         # create one wall per triangle
@@ -71,41 +76,34 @@ class Acoustic(pra.room.Room):
                 )
             )
 
-        self.fs, signal = wavfile.read('sounds/piano.wav')
-        self.signal = signal.astype(np.float32)/32768.0 # required.
+        fs, signal = wavfile.read('sounds/piano.wav')
+        signal = signal.astype(np.float32)/32768.0 # required.
 
         print('Room center: ', cent := compute_volumetric_center(the_mesh))
 
-        self.room = (
+        room = (
             pra.Room(
                 walls,
-                fs=self.fs,
+                fs=fs,
                 max_order=3,
                 ray_tracing=True,
                 air_absorption=True,
-            ))
-        self.room.add_source(cent, signal=self.signal)
-        self.room.add_microphone_array(np.c_[cent + [0, 2, 0], cent + [0, -2, 0]])
+            )
+            .add_source(cent, signal=signal)
+            .add_microphone_array(np.c_[cent + [0, 2, 0], cent + [0, -2, 0]])
+        )
 
-        print('Room volume: ', self.room.volume)
- 
-        return
+        print('Room volume: ', room.volume)
 
-
-    def simulate(self):
+        # compute the rir
         print('Image source model')
-        self.room.image_source_model()
+        room.image_source_model()
         print('Ray tracing')
-        self.room.ray_tracing()
+        room.ray_tracing()
         print('Compute RIR')
-        self.room.compute_rir()
-        print(self.room.mic_array.signals)
-        print('Save to file')
-        #wavfile.write(filename='sounds/output.wav', rate=self.fs, data=self.room.mic_array.signals[0,:])
-
-
-    def __init__(self, filename: str):
-        self.sample_rate = 44100
-        self.speed_of_sound = 343.0
-
-        self.build_stl(filename)
+        room.compute_rir()
+        
+        print('saving file...')
+        print(f'Shapes:\n Original:{signal.shape}\n Simulation:{room.mic_array.signals}')
+        #wavfile.write(filename='sounds/output.wav', rate=fs, data=room.mic_array.signals[0,:])
+        print('file saved')
