@@ -12,6 +12,7 @@ from stl import mesh
 import math
 import sys
 from acoustic import Acoustic
+import collections
 
 # Constants for camera control
 CAMERA_DIST = 5.0      # Distance from camera to object
@@ -71,6 +72,7 @@ class Render:
         
         # Process the model to find walls
         self.walls = self.find_walls()
+        self._calculate_2d_layout()
         
         # Generate unique colors for each wall
         self.wall_colors = self.generate_wall_colors(len(self.walls))
@@ -87,6 +89,7 @@ class Render:
         
         # Initialize model rotation state
         self.model_rotation_x = 0.0
+        self.view_mode = '3D' # '3D' or '2D'
 
     def compute_volumetric_properties(self, filename: str) -> tuple[np.ndarray, float]:
         """Computes the volumetric center (centroid) of a closed triangular mesh."""
@@ -201,36 +204,28 @@ class Render:
         return None
 
     def find_walls(self):
-        """Group triangles into walls based on coplanarity and connectivity"""
+        """Groups connected, coplanar triangles into a single wall."""
         walls = []
         processed_triangles = set()
-        
         for i in range(len(self.model['normals'])):
             if i in processed_triangles:
                 continue
-                
-            # Start a new wall with this triangle
-            wall_triangles = self.find_connected_triangles(i)
+            
+            wall_triangles = self.find_connected_coplanar_triangles(i)
             walls.append({
                 'triangles': list(wall_triangles),
                 'normal': self.model['normals'][i],
-                'vertices': self.get_wall_boundary(wall_triangles)
             })
             processed_triangles.update(wall_triangles)
-            
         return walls
 
-    def find_connected_triangles(self, start_triangle_idx):
-        """Find all triangles connected to the start triangle that are on the same plane."""
+    def find_connected_coplanar_triangles(self, start_triangle_idx):
+        """Finds all triangles connected to the start triangle that are on the same plane."""
         connected = set()
         to_check = {start_triangle_idx}
 
-        # Define the plane using the starting triangle's normal and one of its vertices.
         start_normal = self.model['normals'][start_triangle_idx]
         start_vertex = self.model['vertices'][start_triangle_idx * 3]
-        
-        # Using a tolerance that is more likely to be appropriate for the model's scale.
-        # This value represents the maximum allowed distance from a vertex to the plane.
         TOLERANCE = 1e-2 
 
         while to_check:
@@ -240,21 +235,15 @@ class Render:
             
             connected.add(current_idx)
             
-            # Get vertices of current triangle to check for shared edges.
             v_current_set = {tuple(v) for v in self.model['vertices'][current_idx*3 : (current_idx*3)+3]}
 
-            # Check all other triangles for connections
             for other_idx in range(len(self.model['normals'])):
                 if other_idx in connected or other_idx in to_check:
                     continue
                 
-                # Check for shared edge with current triangle
                 v_other_set = {tuple(v) for v in self.model['vertices'][other_idx*3 : (other_idx*3)+3]}
                 if len(v_current_set.intersection(v_other_set)) >= 2:
-                    
-                    # This triangle is a neighbor. Check if it's on the original plane.
                     is_coplanar = True
-                    # All three vertices of the neighboring triangle must be on the plane.
                     for i in range(3):
                         ov = self.model['vertices'][other_idx * 3 + i]
                         distance = abs(np.dot(ov - start_vertex, start_normal))
@@ -266,86 +255,6 @@ class Render:
                         to_check.add(other_idx)
         
         return connected
-
-    def get_wall_boundary(self, triangle_indices):
-        """Get the boundary vertices of a wall"""
-        # Collect all edges
-        edges = {}
-        for idx in triangle_indices:
-            v1 = tuple(self.model['vertices'][idx * 3])
-            v2 = tuple(self.model['vertices'][idx * 3 + 1])
-            v3 = tuple(self.model['vertices'][idx * 3 + 2])
-            
-            for edge in [(v1, v2), (v2, v3), (v3, v1)]:
-                sorted_edge = tuple(sorted(edge))
-                if sorted_edge in edges:
-                    edges[sorted_edge] += 1
-                else:
-                    edges[sorted_edge] = 1
-        
-        # Find boundary edges (those that appear only once)
-        boundary_edges = [edge for edge, count in edges.items() if count == 1]
-        
-        # Order the boundary edges to form a continuous loop
-        ordered_vertices = []
-        if not boundary_edges:
-            return []
-            
-        current_edge = boundary_edges[0]
-        ordered_vertices.extend(current_edge)
-        boundary_edges.remove(current_edge)
-        
-        while boundary_edges:
-            current_vertex = ordered_vertices[-1]
-            next_edge = None
-            
-            for edge in boundary_edges:
-                if current_vertex in edge:
-                    next_edge = edge
-                    next_vertex = edge[1] if edge[0] == current_vertex else edge[0]
-                    ordered_vertices.append(next_vertex)
-                    boundary_edges.remove(edge)
-                    break
-                    
-            if not next_edge:
-                break
-        
-        return ordered_vertices
-
-    def handle_click(self, mouse_pos):
-        """Handle mouse click to highlight connected planes"""
-        # Get ray from mouse position
-        ray_origin, ray_dir = self.get_ray_from_mouse(mouse_pos)
-        
-        # Find closest intersecting triangle
-        closest_t = float('inf')
-        closest_triangle = None
-        
-        for i in range(0, len(self.model['vertices']), 3):
-            triangle = self.model['vertices'][i:i+3]
-            t = self.check_triangle_intersection(ray_origin, ray_dir, triangle)
-            
-            if t is not None and t < closest_t:
-                closest_t = t
-                closest_triangle = i // 3
-        
-        if closest_triangle is not None:
-            # Find all connected triangles with same normal
-            connected_triangles = self.find_connected_triangles(closest_triangle)
-            
-            # Set timer for 1 second
-            self.highlight_end_time = pygame.time.get_ticks() + 1000
-            self.highlighted_triangles = connected_triangles
-
-    def update_highlight_timer(self):
-        """Update highlight timer and reset colors if time has expired"""
-        current_time = pygame.time.get_ticks()
-        if current_time > self.highlight_end_time and self.highlighted_triangles:
-            # Reset highlighted triangles to blue
-            for triangle_idx in self.highlighted_triangles:
-                start_idx = triangle_idx * 3
-                self.vertex_colors[start_idx:start_idx+3] = [0.0, 0.0, 1.0]
-            self.highlighted_triangles.clear()
 
     def generate_wall_colors(self, num_walls):
         """Generate visually distinct colors for walls using HSV color space"""
@@ -382,57 +291,186 @@ class Render:
         
         return colors
 
+    def _calculate_2d_layout(self):
+        """
+        Calculates a 2D layout by "unfolding" the model. Adjacents walls
+        are placed next to each other.
+        """
+        self.wall_2d_layouts = []
+        if not self.walls:
+            return
+
+        # 1. For each wall, compute its local 2D projection and 3D boundary edges
+        for i, wall in enumerate(self.walls):
+            # Project 3D triangles to a local 2D plane
+            normal = wall['normal']
+            if abs(normal[0]) > 0.1 or abs(normal[1]) > 0.1:
+                u_axis = np.array([-normal[1], normal[0], 0])
+            else:
+                u_axis = np.array([0, -normal[2], normal[1]])
+            u_axis = u_axis / np.linalg.norm(u_axis)
+            v_axis = np.cross(normal, u_axis)
+
+            vtx_3d_to_2d = {}
+            for tri_idx in wall['triangles']:
+                for vert_3d in self.model['vertices'][tri_idx*3 : tri_idx*3+3]:
+                    v_tuple = tuple(vert_3d)
+                    if v_tuple not in vtx_3d_to_2d:
+                        x_2d = np.dot(vert_3d, u_axis)
+                        y_2d = np.dot(vert_3d, v_axis)
+                        vtx_3d_to_2d[v_tuple] = np.array([x_2d, y_2d])
+            
+            wall['vtx_3d_to_2d'] = vtx_3d_to_2d
+            
+            # Find 3D boundary edges using frequency count
+            edges_3d = {}
+            for tri_idx in wall['triangles']:
+                v = [tuple(vert) for vert in self.model['vertices'][tri_idx*3 : tri_idx*3+3]]
+                wall_edges = [tuple(sorted((v[0], v[1]))), tuple(sorted((v[1], v[2]))), tuple(sorted((v[2], v[0])))]
+                for edge in wall_edges:
+                    edges_3d[edge] = edges_3d.get(edge, 0) + 1
+            wall['boundary_edges_3d'] = {edge for edge, count in edges_3d.items() if count == 1}
+
+        # 2. Create a simple horizontal layout for the walls
+        current_x = 0
+        for wall in self.walls:
+            if 'vtx_3d_to_2d' not in wall or not wall['vtx_3d_to_2d']:
+                self.wall_2d_layouts.append(None)
+                continue
+
+            all_2d_verts = list(wall['vtx_3d_to_2d'].values())
+            min_xy = np.min(all_2d_verts, axis=0)
+            max_xy = np.max(all_2d_verts, axis=0)
+
+            offset = -min_xy
+            normalized_triangles_2d = []
+            for tri_idx in wall['triangles']:
+                tri_2d = []
+                for v_3d in self.model['vertices'][tri_idx*3:tri_idx*3+3]:
+                    v_tuple = tuple(v_3d)
+                    v_2d = wall['vtx_3d_to_2d'][v_tuple] + offset
+                    tri_2d.append(v_2d)
+                normalized_triangles_2d.append(tri_2d)
+            
+            layout_info = {
+                'width': max_xy[0] - min_xy[0],
+                'height': max_xy[1] - min_xy[1],
+                'triangles_2d': normalized_triangles_2d,
+                'pos_x': current_x,
+                'pos_y': 0,
+            }
+            self.wall_2d_layouts.append(layout_info)
+            current_x += layout_info['width'] + 50
+
     def draw_model(self):
-        """Draw the loaded 3D model"""
+        """Dispatches to the correct drawing method based on the view mode."""
+        if self.view_mode == '3D':
+            self.draw_model_3d()
+        else:
+            self.draw_model_2d()
+
+    def draw_model_3d(self):
+        """Draw the loaded 3D model."""
         glPushMatrix()
+        
+        glDisable(GL_LIGHTING)
         
         # Scale and center the model
         scale = 1/self.ratio
         glScalef(scale, scale, scale)
-        newcenter = self.center/self.ratio
-        glTranslatef(-newcenter[0], newcenter[1]*1.75, -newcenter[2])
+        center = self.center
+        glTranslatef(-center[0], -center[1], -center[2])
         
         # Apply X-axis rotation
         glRotatef(self.model_rotation_x, 1, 0, 0)
-        
-        # Sort walls by distance for proper transparency
-        camera_pos = np.array([0, 0, 0])  # Camera position in model space
-        sorted_walls = sorted(
-            enumerate(self.walls),
-            key=lambda x: -np.mean([np.linalg.norm(np.array(v) - camera_pos) for v in x[1]['vertices']])
-        )
-        
-        # Disable lighting for flat, stable colors
-        glDisable(GL_LIGHTING)
 
-        # Draw each wall
-        for wall_idx, wall in sorted_walls:
-            # Set wall color
-            glColor4fv(self.wall_colors[wall_idx])
-            
-            # Draw the triangles that make up the wall
-            glBegin(GL_TRIANGLES)
+        all_triangles = []
+        for wall_idx, wall in enumerate(self.walls):
             for tri_idx in wall['triangles']:
-                vertices = self.model['vertices'][tri_idx*3 : tri_idx*3+3]
-                for vertex in vertices:
-                    glVertex3fv(vertex)
-            glEnd()
+                all_triangles.append({'tri_idx': tri_idx, 'wall_idx': wall_idx})
+
+        camera_pos = np.array([0, 0, 0]) 
+        for tri_info in all_triangles:
+            vertices = self.model['vertices'][tri_info['tri_idx']*3 : tri_info['tri_idx']*3+3]
+            avg_z = np.mean([np.linalg.norm(np.array(v) - camera_pos) for v in vertices])
+            tri_info['depth'] = avg_z
         
-        # Draw edges between walls
+        sorted_triangles = sorted(all_triangles, key=lambda x: -x['depth'])
+
+        glEnable(GL_POLYGON_OFFSET_FILL)
+        glPolygonOffset(1.0, 1.0) 
+
+        glBegin(GL_TRIANGLES)
+        for tri_info in sorted_triangles:
+            wall_idx, tri_idx = tri_info['wall_idx'], tri_info['tri_idx']
+            glColor4fv(self.wall_colors[wall_idx])
+            for vertex in self.model['vertices'][tri_idx*3 : tri_idx*3+3]:
+                glVertex3fv(vertex)
+        glEnd()
+
+        glDisable(GL_POLYGON_OFFSET_FILL)
+
         glLineWidth(2.0)
-        glColor4f(0.0, 0.0, 0.0, 1.0)  # Solid black edges
+        glColor4f(0.0, 0.0, 0.0, 1.0) 
         
+        glBegin(GL_LINES)
         for wall in self.walls:
-            vertices = wall['vertices']
-            if len(vertices) >= 3:
-                glBegin(GL_LINE_LOOP)
-                for vertex in vertices:
-                    glVertex3fv(vertex)
-                glEnd()
+            edges = {}
+            for tri_idx in wall['triangles']:
+                v = [tuple(vert) for vert in self.model['vertices'][tri_idx*3 : tri_idx*3+3]]
+                wall_edges = [tuple(sorted((v[0], v[1]))), tuple(sorted((v[1], v[2]))), tuple(sorted((v[2], v[0])))]
+                for edge in wall_edges:
+                    edges[edge] = edges.get(edge, 0) + 1
+            
+            for edge, count in edges.items():
+                if count == 1:
+                    glVertex3fv(edge[0])
+                    glVertex3fv(edge[1])
+        glEnd()
         
-        glLineWidth(1.0)
-        # Re-enable lighting for other scene elements (e.g., axes)
         glEnable(GL_LIGHTING)
+        glPopMatrix()
+
+    def draw_model_2d(self):
+        """Draws the 2D unfolded layout of the walls."""
+        # This is a placeholder. The full implementation is complex.
+        # For now, it will draw the simple horizontal layout.
+        glPushMatrix()
+        
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        
+        total_width = sum(layout['width'] + 50 for layout in self.wall_2d_layouts if layout)
+        max_height = max((layout['height'] for layout in self.wall_2d_layouts if layout), default=1)
+        gluOrtho2D(-50, total_width, -50, max_height + 50)
+        
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        
+        glDisable(GL_DEPTH_TEST)
+        glDisable(GL_LIGHTING)
+        
+        for i, layout_info in enumerate(self.wall_2d_layouts):
+            if not layout_info: continue
+            
+            glPushMatrix()
+            glTranslatef(layout_info['pos_x'], layout_info['pos_y'], 0)
+            
+            glColor4fv(self.wall_colors[i])
+            glBegin(GL_TRIANGLES)
+            for tri_2d in layout_info['triangles_2d']:
+                for vert_2d in tri_2d:
+                    glVertex2fv(vert_2d)
+            glEnd()
+
+            glPopMatrix()
+
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_LIGHTING)
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
         
         glPopMatrix()
 
@@ -461,6 +499,9 @@ class Render:
 
     def draw_stats(self):
         """Draw camera statistics on screen"""
+        if self.view_mode == '2D':
+            return
+            
         # Create text surfaces with black color for better visibility on white background
         heading_text = f"Heading: {self.camera_heading%360:.1f}°"
         pitch_text = f"Pitch: {self.camera_pitch:.1f}°"
@@ -543,3 +584,10 @@ class Render:
     def flip_model_x(self):
         """Flip the model 90 degrees around the X axis"""
         self.model_rotation_x = (self.model_rotation_x + 90) % 360 
+
+    def toggle_view_mode(self):
+        """Toggles between 3D and 2D layout view."""
+        if self.view_mode == '3D':
+            self.view_mode = '2D'
+        else:
+            self.view_mode = '3D' 

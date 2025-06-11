@@ -24,8 +24,6 @@ class App():
                     if event.button == 1:  # Left mouse button
                         self.render.mouse_down = True
                         self.render.last_mouse_pos = pygame.mouse.get_pos()
-                        # Handle click for highlighting
-                        self.render.handle_click(pygame.mouse.get_pos())
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
                         self.render.mouse_down = False
@@ -46,6 +44,8 @@ class App():
                         print("Acoustic simulation finished.")
                     elif event.key == pygame.K_f:
                         self.render.flip_model_x()
+                    elif event.key == pygame.K_l:
+                        self.render.toggle_view_mode()
 
             # Handle mouse movement for camera rotation
             if self.render.mouse_down and self.render.last_mouse_pos:
