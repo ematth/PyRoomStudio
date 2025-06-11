@@ -9,7 +9,7 @@ class App():
     def __init__(self, model_name):
         self.name = 'App'
         self.model = None
-        self.acoustic = Acoustic(filename=model_name)
+        self.acoustic = Acoustic()
         self.render = Render(filename=model_name, acoustic=self.acoustic)
         self.running = True
 
@@ -24,6 +24,8 @@ class App():
                     if event.button == 1:  # Left mouse button
                         self.render.mouse_down = True
                         self.render.last_mouse_pos = pygame.mouse.get_pos()
+                        # Handle click for highlighting
+                        self.render.handle_click(pygame.mouse.get_pos())
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
                         self.render.mouse_down = False
@@ -39,7 +41,9 @@ class App():
                     if event.key == pygame.K_ESCAPE:
                         self.running = False
                     elif event.key == pygame.K_p:
-                        self.acoustic.simulate()
+                        print("Starting acoustic simulation...")
+                        self.acoustic.simulate(self.render.walls, self.render.center, self.render.model['vertices'])
+                        print("Acoustic simulation finished.")
                     elif event.key == pygame.K_f:
                         self.render.flip_model_x()
 
