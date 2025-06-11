@@ -62,7 +62,7 @@ class App():
             # Update camera and draw scene
             self.render.update_camera()
             self.render.draw_model()
-            self.render.draw_axes()
+            # self.render.draw_axes()
             
             # Draw the stats (text) on top of the 3D scene
             self.render.draw_stats()

@@ -33,6 +33,8 @@ class Render:
         
         # Set up OpenGL
         glEnable(GL_DEPTH_TEST)
+        glEnable(GL_LIGHTING)
+        glEnable(GL_LIGHT0)
         glEnable(GL_COLOR_MATERIAL)
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
         
@@ -199,7 +201,7 @@ class Render:
         return None
 
     def find_walls(self):
-        """Group triangles into walls based on coplanarity and connectivity."""
+        """Group triangles into walls based on coplanarity and connectivity"""
         walls = []
         processed_triangles = set()
         
@@ -208,13 +210,107 @@ class Render:
                 continue
                 
             # Start a new wall with this triangle
-            wall_triangles = self.find_connected_coplanar_triangles(i)
-            
-            # Each group of coplanar triangles forms a wall
-            walls.append({'triangles': list(wall_triangles)})
+            wall_triangles = self.find_connected_triangles(i)
+            walls.append({
+                'triangles': list(wall_triangles),
+                'normal': self.model['normals'][i],
+                'vertices': self.get_wall_boundary(wall_triangles)
+            })
             processed_triangles.update(wall_triangles)
             
         return walls
+
+    def find_connected_triangles(self, start_triangle_idx):
+        """Find all triangles connected to the start triangle that are on the same plane."""
+        connected = set()
+        to_check = {start_triangle_idx}
+
+        # Define the plane using the starting triangle's normal and one of its vertices.
+        start_normal = self.model['normals'][start_triangle_idx]
+        start_vertex = self.model['vertices'][start_triangle_idx * 3]
+        
+        # Using a tolerance that is more likely to be appropriate for the model's scale.
+        # This value represents the maximum allowed distance from a vertex to the plane.
+        TOLERANCE = 1e-2 
+
+        while to_check:
+            current_idx = to_check.pop()
+            if current_idx in connected:
+                continue
+            
+            connected.add(current_idx)
+            
+            # Get vertices of current triangle to check for shared edges.
+            v_current_set = {tuple(v) for v in self.model['vertices'][current_idx*3 : (current_idx*3)+3]}
+
+            # Check all other triangles for connections
+            for other_idx in range(len(self.model['normals'])):
+                if other_idx in connected or other_idx in to_check:
+                    continue
+                
+                # Check for shared edge with current triangle
+                v_other_set = {tuple(v) for v in self.model['vertices'][other_idx*3 : (other_idx*3)+3]}
+                if len(v_current_set.intersection(v_other_set)) >= 2:
+                    
+                    # This triangle is a neighbor. Check if it's on the original plane.
+                    is_coplanar = True
+                    # All three vertices of the neighboring triangle must be on the plane.
+                    for i in range(3):
+                        ov = self.model['vertices'][other_idx * 3 + i]
+                        distance = abs(np.dot(ov - start_vertex, start_normal))
+                        if distance > TOLERANCE:
+                            is_coplanar = False
+                            break
+                    
+                    if is_coplanar:
+                        to_check.add(other_idx)
+        
+        return connected
+
+    def get_wall_boundary(self, triangle_indices):
+        """Get the boundary vertices of a wall"""
+        # Collect all edges
+        edges = {}
+        for idx in triangle_indices:
+            v1 = tuple(self.model['vertices'][idx * 3])
+            v2 = tuple(self.model['vertices'][idx * 3 + 1])
+            v3 = tuple(self.model['vertices'][idx * 3 + 2])
+            
+            for edge in [(v1, v2), (v2, v3), (v3, v1)]:
+                sorted_edge = tuple(sorted(edge))
+                if sorted_edge in edges:
+                    edges[sorted_edge] += 1
+                else:
+                    edges[sorted_edge] = 1
+        
+        # Find boundary edges (those that appear only once)
+        boundary_edges = [edge for edge, count in edges.items() if count == 1]
+        
+        # Order the boundary edges to form a continuous loop
+        ordered_vertices = []
+        if not boundary_edges:
+            return []
+            
+        current_edge = boundary_edges[0]
+        ordered_vertices.extend(current_edge)
+        boundary_edges.remove(current_edge)
+        
+        while boundary_edges:
+            current_vertex = ordered_vertices[-1]
+            next_edge = None
+            
+            for edge in boundary_edges:
+                if current_vertex in edge:
+                    next_edge = edge
+                    next_vertex = edge[1] if edge[0] == current_vertex else edge[0]
+                    ordered_vertices.append(next_vertex)
+                    boundary_edges.remove(edge)
+                    break
+                    
+            if not next_edge:
+                break
+        
+        return ordered_vertices
 
     def handle_click(self, mouse_pos):
         """Handle mouse click to highlight connected planes"""
@@ -235,7 +331,7 @@ class Render:
         
         if closest_triangle is not None:
             # Find all connected triangles with same normal
-            connected_triangles = self.find_connected_coplanar_triangles(closest_triangle)
+            connected_triangles = self.find_connected_triangles(closest_triangle)
             
             # Set timer for 1 second
             self.highlight_end_time = pygame.time.get_ticks() + 1000
@@ -287,7 +383,7 @@ class Render:
         return colors
 
     def draw_model(self):
-        """Draw the loaded 3D model."""
+        """Draw the loaded 3D model"""
         glPushMatrix()
         
         # Scale and center the model
@@ -298,71 +394,43 @@ class Render:
         
         # Apply X-axis rotation
         glRotatef(self.model_rotation_x, 1, 0, 0)
-
-        # To handle transparency correctly, we need to sort all triangles
-        # from back to front relative to the camera.
-        all_triangles = []
-        for wall_idx, wall in enumerate(self.walls):
-            for tri_idx in wall['triangles']:
-                all_triangles.append({'tri_idx': tri_idx, 'wall_idx': wall_idx})
-
-        # Calculate depth for each triangle (average of its vertices)
-        camera_pos = np.array([0, 0, 0]) 
-        for tri_info in all_triangles:
-            vertices = self.model['vertices'][tri_info['tri_idx']*3 : tri_info['tri_idx']*3+3]
-            avg_z = np.mean([np.linalg.norm(np.array(v) - camera_pos) for v in vertices])
-            tri_info['depth'] = avg_z
         
-        # Sort triangles from back to front
-        sorted_triangles = sorted(all_triangles, key=lambda x: -x['depth'])
-
-        # --- Drawing Pass 1: The colored faces ---
+        # Sort walls by distance for proper transparency
+        camera_pos = np.array([0, 0, 0])  # Camera position in model space
+        sorted_walls = sorted(
+            enumerate(self.walls),
+            key=lambda x: -np.mean([np.linalg.norm(np.array(v) - camera_pos) for v in x[1]['vertices']])
+        )
+        
+        # Disable lighting for flat, stable colors
         glDisable(GL_LIGHTING)
-        glEnable(GL_POLYGON_OFFSET_FILL)
-        glPolygonOffset(1.0, 1.0) # Offset to prevent z-fighting with edges
 
-        glBegin(GL_TRIANGLES)
-        for tri_info in sorted_triangles:
-            wall_idx = tri_info['wall_idx']
-            tri_idx = tri_info['tri_idx']
-            
+        # Draw each wall
+        for wall_idx, wall in sorted_walls:
+            # Set wall color
             glColor4fv(self.wall_colors[wall_idx])
             
-            vertices = self.model['vertices'][tri_idx*3 : tri_idx*3+3]
-            for vertex in vertices:
-                glVertex3fv(vertex)
-        glEnd()
-
-        glDisable(GL_POLYGON_OFFSET_FILL)
-
-        # --- Drawing Pass 2: The black boundary edges ---
-        glLineWidth(2.0)
-        glColor4f(0.0, 0.0, 0.0, 1.0) # Solid black edges
-        
-        glBegin(GL_LINES)
-        for wall in self.walls:
-            edges = {}  # Using a dict as a frequency map for edges
+            # Draw the triangles that make up the wall
+            glBegin(GL_TRIANGLES)
             for tri_idx in wall['triangles']:
-                # Get triangle vertices as tuples to make them hashable and sortable
-                v = [tuple(vert) for vert in self.model['vertices'][tri_idx*3 : tri_idx*3+3]]
-                
-                # Define edges in a canonical way (sorted) to count them
-                wall_edges = [
-                    tuple(sorted((v[0], v[1]))),
-                    tuple(sorted((v[1], v[2]))),
-                    tuple(sorted((v[2], v[0])))
-                ]
-                
-                for edge in wall_edges:
-                    edges[edge] = edges.get(edge, 0) + 1
-            
-            # Draw edges that only appear once (they are on the boundary)
-            for edge, count in edges.items():
-                if count == 1:
-                    glVertex3fv(edge[0])
-                    glVertex3fv(edge[1])
-        glEnd()
+                vertices = self.model['vertices'][tri_idx*3 : tri_idx*3+3]
+                for vertex in vertices:
+                    glVertex3fv(vertex)
+            glEnd()
         
+        # Draw edges between walls
+        glLineWidth(2.0)
+        glColor4f(0.0, 0.0, 0.0, 1.0)  # Solid black edges
+        
+        for wall in self.walls:
+            vertices = wall['vertices']
+            if len(vertices) >= 3:
+                glBegin(GL_LINE_LOOP)
+                for vertex in vertices:
+                    glVertex3fv(vertex)
+                glEnd()
+        
+        glLineWidth(1.0)
         # Re-enable lighting for other scene elements (e.g., axes)
         glEnable(GL_LIGHTING)
         
@@ -475,50 +543,3 @@ class Render:
     def flip_model_x(self):
         """Flip the model 90 degrees around the X axis"""
         self.model_rotation_x = (self.model_rotation_x + 90) % 360 
-
-    def find_connected_coplanar_triangles(self, start_triangle_idx):
-        """Find all triangles connected to the start triangle that are on the same plane."""
-        connected = set()
-        to_check = {start_triangle_idx}
-
-        # Define the plane using the starting triangle's normal and one of its vertices.
-        start_normal = self.model['normals'][start_triangle_idx]
-        start_vertex = self.model['vertices'][start_triangle_idx * 3]
-        
-        # Using a tolerance that is more likely to be appropriate for the model's scale.
-        # This value represents the maximum allowed distance from a vertex to the plane.
-        TOLERANCE = 1e-2 
-
-        while to_check:
-            current_idx = to_check.pop()
-            if current_idx in connected:
-                continue
-            
-            connected.add(current_idx)
-            
-            # Get vertices of current triangle to check for shared edges.
-            v_current_set = {tuple(v) for v in self.model['vertices'][current_idx*3 : (current_idx*3)+3]}
-
-            # Check all other triangles for connections
-            for other_idx in range(len(self.model['normals'])):
-                if other_idx in connected or other_idx in to_check:
-                    continue
-                
-                # Check for shared edge with current triangle
-                v_other_set = {tuple(v) for v in self.model['vertices'][other_idx*3 : (other_idx*3)+3]}
-                if len(v_current_set.intersection(v_other_set)) >= 2:
-                    
-                    # This triangle is a neighbor. Check if it's on the original plane.
-                    is_coplanar = True
-                    # All three vertices of the neighboring triangle must be on the plane.
-                    for i in range(3):
-                        ov = self.model['vertices'][other_idx * 3 + i]
-                        distance = abs(np.dot(ov - start_vertex, start_normal))
-                        if distance > TOLERANCE:
-                            is_coplanar = False
-                            break
-                    
-                    if is_coplanar:
-                        to_check.add(other_idx)
-        
-        return connected 
