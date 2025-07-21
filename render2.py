@@ -53,7 +53,6 @@ class Render:
         glClearColor(1.0, 1.0, 1.0, 1.0)
         
         # Initialize camera parameters
-        self.camera_distance = CAMERA_DIST
         self.camera_heading = CAMERA_HEADING
         self.camera_pitch = CAMERA_PITCH
         self.min_distance = MIN_DIST
@@ -67,8 +66,13 @@ class Render:
         
         # Load the model
         self.center, self.volume = self.compute_volumetric_properties(filename)
-        self.ratio = (self.volume / 1000 / 7500)
+        self.ratio = self.volume / 100
         self.model = self.load_model(filename)
+
+        self.camera_distance = self.volume ** (1/3)
+        print('Camera Distance: ', self.camera_distance)
+        print('Volume: ', self.volume)
+        print('Ratio: ', self.ratio)
         
         # Process the model to find walls
         self.walls = self.find_walls()
