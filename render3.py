@@ -12,21 +12,20 @@ import random
 from PIL import Image
 
 class Render3:
-    def __init__(self, filename, width=800, height=600):
-        pygame.init()
-        self.width = width
-        self.height = height
-        self.display = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
-        pygame.display.set_caption("STL Viewer")
-
+    def __init__(self, filename, view_rect, window_height):
+        self.view_rect = view_rect
+        self.window_height = window_height
+        self.width = view_rect.width
+        self.height = view_rect.height
+        
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_BLEND)  # Enable blending for transparency
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)  # Standard alpha blending
         glEnable(GL_TEXTURE_2D)  # Enable texturing
-        glClearColor(1.0, 1.0, 1.0, 1.0)
+        glClearColor(1.0, 1.0, 1.0, 1.0) # This will be cleared over by the GUI background
 
         glMatrixMode(GL_PROJECTION)
-        gluPerspective(45, (width/height), 0.1, 100.0)
+        gluPerspective(45, (self.width/self.height), 0.1, 100.0)
         glMatrixMode(GL_MODELVIEW)
 
         self.model = mesh.Mesh.from_file(filename)
@@ -40,8 +39,11 @@ class Render3:
         self.last_mouse_pos = None
         self.transparent_mode = False  # Track transparency state
 
+        # The following is no longer needed since GUI now controls the main loop
+        # self.running = True
+
         # Load texture
-        self.texture_id = self.load_texture("wood.png")
+        self.texture_id = self.load_texture("cat.png")
 
         # Build edge map for feature/boundary edge detection
         self.feature_edges = self.compute_feature_edges(angle_threshold_degrees=30)
@@ -373,7 +375,7 @@ class Render3:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # Left click - apply texture
                 self.mouse_down = True
-                self.last_mouse_pos = pygame.mouse.get_pos()
+                self.last_mouse_pos = event.pos
                 # Ensure OpenGL matrices are up-to-date for ray picking
                 glPushMatrix()
                 self.update_camera()
@@ -397,7 +399,7 @@ class Render3:
                 glPushMatrix()
                 self.update_camera()
                 glTranslatef(-self.center[0], -self.center[1], -self.center[2])
-                ray_origin, ray_dir = self.get_ray_from_mouse(pygame.mouse.get_pos())
+                ray_origin, ray_dir = self.get_ray_from_mouse(event.pos)
                 glPopMatrix()
                 triangles = self.model.vectors
                 min_t = float('inf')
@@ -417,7 +419,7 @@ class Render3:
                 self.mouse_down = False
         elif event.type == pygame.MOUSEMOTION:
             if self.mouse_down and self.last_mouse_pos:
-                x, y = pygame.mouse.get_pos()
+                x, y = event.pos
                 last_x, last_y = self.last_mouse_pos
                 dx = x - last_x
                 dy = y - last_y
@@ -440,15 +442,30 @@ class Render3:
                 self.surface_materials = [None for _ in self.surfaces]
                 print("Reset all surfaces to default")
 
+    def draw_scene(self):
+        # Set the viewport to the correct sub-region of the window
+        glEnable(GL_SCISSOR_TEST)
+        glScissor(self.view_rect.x, self.window_height - self.view_rect.y - self.view_rect.height, self.view_rect.width, self.view_rect.height)
+        glViewport(self.view_rect.x, self.window_height - self.view_rect.y - self.view_rect.height, self.view_rect.width, self.view_rect.height)
+        
+        # This method will be called by the GUI class to render the 3D model
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        self.draw_model()
+        
+        glDisable(GL_SCISSOR_TEST)
+        
     def run(self):
-        self.running = True
-        clock = pygame.time.Clock()
-        while self.running:
-            for event in pygame.event.get():
-                self.check_keybinds(event)
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-            self.draw_model()
-            pygame.display.flip()
-            clock.tick(60)
-        pygame.quit()
+        # The main loop is now controlled by the GUI class
+        # This method is no longer needed and can be removed or left empty
+        pass
+        # self.running = True
+        # clock = pygame.time.Clock()
+        # while self.running:
+        #     for event in pygame.event.get():
+        #         self.check_keybinds(event)
+        #     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        #     self.draw_model()
+        #     pygame.display.flip()
+        #     clock.tick(60)
+        # pygame.quit()
     

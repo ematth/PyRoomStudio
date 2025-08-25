@@ -36,6 +36,7 @@ pure_eval==0.2.3
 pybind11==2.13.6
 pycparser==2.22
 pygame==2.6.1
+pygame_gui==0.6.14
 Pygments==2.19.1
 pyobjc==11.0
 pyobjc-core==11.0
