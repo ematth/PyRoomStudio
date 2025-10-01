@@ -1,6 +1,6 @@
 <!------------------------------------------------------------------->
 
-# 3DARRE (working project name)
+# PyRoomStudio
 
 **Authors:**
 
@@ -8,7 +8,7 @@ William (Zhiwen) Chen (willc@illinois.edu), *project manager*
 
 Evan M. Matthews (evanmm3@illinois.edu), *lead programmer*
 
-**3D** **A**coustic **R**oom **R**endering **E**nvironment (3DARRE) is a graphical application for rendering and analyzing acoustical properties of 3D spaces via meshes. The projects internals function on [pyroomacoustics](https://github.com/LCAV/pyroomacoustics), a library for testing and simulating acoustics algorithms written by Robin Scheibler. 
+**PyRoomStudio** (PRS) is a graphical application for rendering and analyzing acoustical properties of 3D spaces via meshes. The projects internals function on [pyroomacoustics](https://github.com/LCAV/pyroomacoustics), a library for testing and simulating acoustics algorithms written by Robin Scheibler. 
 
 <!------------------------------------------------------------------->
 
