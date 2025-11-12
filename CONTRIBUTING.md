@@ -1,10 +1,14 @@
-# PyRoomStudio - Contributing
+# PyRoomStudio & [PyRoomAcoustics](https://github.com/LCAV/pyroomacoustics) - Contributing
 
 We are always accepting external contributions! We're looking for users who are interested in contributing code (GUI and app functionality) and/or material coefficients (for a public database).
+
+Additionally, this project wouldn't be possible without [PyRoomAcoustics](https://github.com/LCAV/pyroomacoustics), which we use for performing acoustic simulations.
+We highly suggest supporting PRA and contributing to them as well. Their updates also help in improving PyRoomStudio!
 
 <p align="center">
   <img width="600" src="assets/contributing-image.png" alt="">
 </p>
+
 
 ## Developing
 
@@ -12,10 +16,7 @@ We are always accepting external contributions! We're looking for users who are 
 
 The Issues tab on GitHub contains a running list of features to implement, as well as any bugs or problems that arise from development.
 
-### PyRoomAcoustics
 
-This project would not be possible without [PyRoomAcoustics](https://github.com/LCAV/pyroomacoustics), which we use for performing acoustic simulations.
-We highly suggest supporting PRA and contributing to them as well. Their updates also help in improving PyRoomStudio!
 
 ### Development Environment
 
