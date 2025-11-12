@@ -2,6 +2,10 @@
 
 We are always accepting external contributions! We're looking for users who are interested in contributing code (GUI and app functionality) and/or material coefficients (for a public database).
 
+<p align="center">
+  <img width="500" src="assets/contributing-image.png" alt="">
+</p>
+
 ## Developing
 
 ### Issues

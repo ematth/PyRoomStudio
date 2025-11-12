@@ -194,7 +194,7 @@ class Acoustic(pra.room.Room):
         )
         
         # Set the number of rays manually to avoid calculation errors
-        room.set_ray_tracing(n_rays=100)
+        room.set_ray_tracing(n_rays=1000)
 
         print('Room volume: ', room.volume)
         

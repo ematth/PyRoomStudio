@@ -53,7 +53,7 @@ class Render:
         self.texture_id = self.load_texture("cat.png")
 
         # Build edge map for feature/boundary edge detection
-        self.feature_edges = self.compute_feature_edges(angle_threshold_degrees=30)
+        self.feature_edges = self.compute_feature_edges(angle_threshold_degrees=10)
 
         # Group triangles into surfaces
         self.surfaces = self.group_triangles_into_surfaces()
