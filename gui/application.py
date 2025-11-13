@@ -37,6 +37,9 @@ class MainApplication:
         self.viewport_rect = None
         self.init_3d_renderer()
         
+        # Sound source file for acoustic simulation
+        self.sound_source_file = None  # Will use default if None
+        
         # Initialize GUI components
         self.init_gui()
     
@@ -290,8 +293,8 @@ class MainApplication:
         
         # Bottom toolbar
         bottom_buttons = [
-            ("Import Room", self.on_import_room, "Future feature!", False),
-            ("Place Sound", self.on_place_sound, "Future feature!", False),
+            ("Import Room", self.on_import_room, None, True),  # Enabled - same as File -> Open Project
+            ("Import Sound", self.on_import_sound, None, True),  # Enabled
             ("Place Listener", self.on_place_listener, "Future feature!", False),
             ("Render", self.on_render, None, True)  # Enabled
         ]
@@ -359,8 +362,57 @@ class MainApplication:
     
     # Panel callback methods
     def on_library_item_select(self, item): print(f"Library item selected: {item}")
-    def on_import_room(self): print("Import room")
-    def on_place_sound(self): print("Place sound")
+    
+    def on_import_room(self):
+        """Import a 3D room model (same as File -> Open Project)"""
+        print("Opening STL file...")
+        if self.open_stl_file_dialog():
+            print("STL file loaded successfully")
+        else:
+            print("No file selected or failed to load")
+    
+    def on_import_sound(self):
+        """Open a file dialog to select a sound source for acoustic simulation"""
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            
+            # Create a temporary root window (hidden)
+            root = tk.Tk()
+            root.withdraw()  # Hide the root window
+            
+            # Open file dialog for audio files
+            filepath = filedialog.askopenfilename(
+                title="Select Sound Source File",
+                filetypes=[
+                    ("Audio files", "*.wav *.mp3 *.flac *.ogg"),
+                    ("WAV files", "*.wav"),
+                    ("All files", "*.*")
+                ],
+                initialdir="sounds/sources"
+            )
+            
+            # Clean up the temporary window
+            root.destroy()
+            
+            if filepath:
+                self.sound_source_file = filepath
+                print(f"Sound source selected: {filepath}")
+                # Update window title to show loaded sound
+                sound_name = filepath.split('/')[-1].split('\\')[-1]
+                pygame.display.set_caption(f"PyRoomStudio - Sound: {sound_name}")
+                return True
+            else:
+                print("No sound file selected")
+                return False
+            
+        except ImportError:
+            print("tkinter not available - cannot open file dialog")
+            return False
+        except Exception as e:
+            print(f"Error opening sound file dialog: {e}")
+            return False
+    
     def on_place_listener(self): print("Place listener")
     
     def on_render(self):
@@ -398,13 +450,21 @@ class MainApplication:
             scale_factor = self.renderer.model_scale_factor
             print(f"Using scale factor from renderer: {scale_factor:.4f}x")
             
-            # Run the simulation
+            # Run the simulation with custom sound source if loaded
             print("Running PyRoomAcoustics simulation...")
+            if self.sound_source_file:
+                print(f"Using custom sound source: {self.sound_source_file}")
+            else:
+                print("Using default sound source")
             print("(This may take a few moments...)")
-            output_file = acoustic.simulate(walls, room_center, model_vertices, scale_factor)
+            output_file = acoustic.simulate(walls, room_center, model_vertices, scale_factor, self.sound_source_file)
             
-            # Restore window title
-            pygame.display.set_caption("PyRoomStudio")
+            # Restore window title (keep sound name if loaded)
+            if self.sound_source_file:
+                sound_name = self.sound_source_file.split('/')[-1].split('\\')[-1]
+                pygame.display.set_caption(f"PyRoomStudio - Sound: {sound_name}")
+            else:
+                pygame.display.set_caption("PyRoomStudio")
             
             # Print success message
             print("\n" + "=" * 60)

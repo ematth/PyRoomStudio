@@ -93,7 +93,7 @@ class Acoustic(pra.room.Room):
         
         return spectrogram_file
 
-    def simulate(self, walls_from_render, room_center, model_vertices, scale_factor=None):
+    def simulate(self, walls_from_render, room_center, model_vertices, scale_factor=None, sound_source_file=None):
         """
         Simulate acoustics in the given room geometry.
         
@@ -102,6 +102,7 @@ class Acoustic(pra.room.Room):
             room_center: Center point of the room (numpy array)
             model_vertices: Flattened vertex array from the 3D model
             scale_factor: Optional scale factor for the model. If None, uses SIZE_REDUCTION_FACTOR
+            sound_source_file: Optional path to custom sound source file. If None, uses SOUND_SOURCE_FILE
             
         Returns:
             str: Path to the output audio file
@@ -116,11 +117,15 @@ class Acoustic(pra.room.Room):
             print(f"Using default scale factor: 1/{SIZE_REDUCTION_FACTOR}")
         else:
             print(f"Using custom scale factor: {scale_factor}")
+        
+        # Use custom sound source file or default
+        source_file = sound_source_file if sound_source_file else SOUND_SOURCE_FILE
+        
         # Validate sound source file exists
-        if not os.path.exists(SOUND_SOURCE_FILE):
+        if not os.path.exists(source_file):
             raise FileNotFoundError(
-                f"Sound source file not found: {SOUND_SOURCE_FILE}\n"
-                f"Please ensure the file exists or update SOUND_SOURCE_FILE in acoustic.py"
+                f"Sound source file not found: {source_file}\n"
+                f"Please ensure the file exists or select a valid audio file"
             )
         
         # Validate input geometry
@@ -162,7 +167,7 @@ class Acoustic(pra.room.Room):
         if len(walls) == 0:
             raise ValueError("No valid walls created from the 3D model")
 
-        fs, signal = wavfile.read(SOUND_SOURCE_FILE)
+        fs, signal = wavfile.read(source_file)
         signal = signal.astype(np.float32) / 32768.0  # required.
         
         # Ensure signal is mono (1D array)
@@ -280,7 +285,7 @@ class Acoustic(pra.room.Room):
         # Generate spectrogram comparison
         try:
             spectrogram_file = self.generate_spectrogram_comparison(
-                SOUND_SOURCE_FILE, output_file, fs, output_dir
+                source_file, output_file, fs, output_dir
             )
             print(f'Saved spectrogram comparison to: {spectrogram_file}')
         except Exception as e:

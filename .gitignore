@@ -1,5 +1,9 @@
 # extras
 room_tutorial.ipynb
+.DS_Store
+.claude/
+*.pyc
+sounds/simulations/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
